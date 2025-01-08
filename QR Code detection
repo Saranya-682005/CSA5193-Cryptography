@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure QR Code with RSA</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.0.0/jsencrypt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+</head>
+<body>
+    <h1>Secure QR Code Detection and Decoding</h1>
+    
+    <h3>Step 1: Generate RSA Keys</h3>
+    <button onclick="generateKeys()">Generate RSA Keys</button>
+    <pre id="keys"></pre>
+    
+    <h3>Step 2: Enter Message to Encrypt</h3>
+    <input type="text" id="message" placeholder="Enter your message">
+    <button onclick="encryptAndGenerateQR()">Encrypt and Generate QR Code</button>
+    <div id="qr-code"></div>
+    
+    <h3>Step 3: Upload QR Code to Decode and Decrypt</h3>
+    <input type="file" id="upload" accept="image/*" onchange="decodeAndDecrypt()">
+    <p id="decrypted-message"></p>
+
+    <script>
+        let publicKey = '';
+        let privateKey = '';
+        
+        // Step 1: Generate RSA keys using JSEncrypt
+        function generateKeys() {
+            const crypt = new JSEncrypt({ default_key_size: 2048 });
+            privateKey = crypt.getPrivateKey();
+            publicKey = crypt.getPublicKey();
+            document.getElementById('keys').innerText = `Public Key:\n${publicKey}\n\nPrivate Key:\n${privateKey}`;
+        }
+
+        // Step 2: Encrypt message and generate QR code
+        function encryptAndGenerateQR() {
+            const message = document.getElementById('message').value;
+            if (!message || !publicKey) {
+                alert("Please enter a message and generate keys first.");
+                return;
+            }
+
+            const crypt = new JSEncrypt();
+            crypt.setPublicKey(publicKey);
+            const encryptedMessage = crypt.encrypt(message);
+            
+            if (!encryptedMessage) {
+                alert("Encryption failed.");
+                return;
+            }
+
+            // Generate QR code with the encrypted message
+            QRCode.toCanvas(encryptedMessage, { width: 256 }, function (err, canvas) {
+                if (err) console.error(err);
+                document.getElementById('qr-code').innerHTML = '';
+                document.getElementById('qr-code').appendChild(canvas);
+            });
+        }
+
+        // Step 3: Decode QR code and decrypt message
+        function decodeAndDecrypt() {
+            const file = document.getElementById('upload').files[0];
+            if (!file || !privateKey) {
+                alert("Please upload a QR code and generate keys first.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const img = new Image();
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    context.drawImage(img, 0, 0);
+
+                    // Use QR code reader to decode
+                    const code = jsQR(context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+                    if (code) {
+                        const encryptedMessage = code.data;
+                        
+                        // Decrypt the message using the private key
+                        const crypt = new JSEncrypt();
+                        crypt.setPrivateKey(privateKey);
+                        const decryptedMessage = crypt.decrypt(encryptedMessage);
+                        
+                        if (decryptedMessage) {
+                            document.getElementById('decrypted-message').innerText = `Decrypted Message: ${decryptedMessage}`;
+                        } else {
+                            alert("Decryption failed.");
+                        }
+                    } else {
+                        alert("Failed to decode QR code.");
+                    }
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+</html>
